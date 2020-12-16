@@ -58,7 +58,9 @@ function addItemToCharacter(
   type, // string: The type of item to add.
   uses // int: amount of times you can use this.
 ) {
+  console.log(type);
   if (this.items[type]) {
+
     character.items[type] = {
       ...this.items[type],
       index: Object.keys(character.items).length,
@@ -184,6 +186,7 @@ function getSelectedItem(
 function getItem(
   type // string: Name of the item that you are accessing
 ) {
+  console.log(this.items[type])
   return this.items[type];
 }
 

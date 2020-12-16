@@ -18,9 +18,9 @@ function addCharacters(
 // Listen to Characters on the server.
 function getCharacters(
   type, // string: The type of characters.
-  onAdd = function () {}, // function: This will get run when a character is added.
-  onRemove = function () {}, // function: This will get run when a character is removed.
-  onUpdate = function () {} // function: This will get run when a character is updated.
+  onAdd = function () { }, // function: This will get run when a character is added.
+  onRemove = function () { }, // function: This will get run when a character is removed.
+  onUpdate = function () { } // function: This will get run when a character is updated.
 ) {
   const { game } = this;
   const self = this;
@@ -30,7 +30,6 @@ function getCharacters(
         const { id, x, y, spriteName } = change.value;
         let sprite = game.add.container(x, y);
         let character = game.front_layer.create(0, 0, spriteName || type);
-        character.rotation = change.value.rotation;
         sprite.add([character]);
         sprite.setScale(game.scales[type] || 1);
         game[type][id] = {
@@ -38,6 +37,7 @@ function getCharacters(
           ...change.value,
           attached: {},
         };
+        if (change.value.rotation) sprite.rotation = change.value.rotation;
         onAdd(game[type][id], change.value);
       } else if (change.operation === 'remove') {
         const { id } = change.path;
@@ -59,7 +59,7 @@ function getCharacters(
           selecteds[0].classList.remove('selected');
           document
             .getElementsByClassName('item')
-            [change.value].classList.add('selected');
+          [change.value].classList.add('selected');
         }
       }
       if (change.operation === 'add' && change.value && change.value.type) {
@@ -80,9 +80,9 @@ function getCharacters(
         }
         if (change.value.type === 'item') {
           const itemScale =
-            game[type][change.value.id].sprite._scaleX * 4 * change.value.scale;
+            change.value.scale / game[type][change.value.id].sprite._scaleX;
           let item = game.front_layer
-            .create(change.value.x, change.value.y, change.value.name)
+            .create(change.value.x * (1 / game[type][change.value.id].sprite._scaleX), change.value.y * (1 / game[type][change.value.id].sprite._scaleX), change.value.name)
             .setScale(itemScale);
           self.sendSpriteSize(change.value.name, itemScale || 1);
           game[type][change.value.id].sprite.add(item);
@@ -151,8 +151,12 @@ function getCharacters(
           }
           game[type][id].sprite[attribute] = change.value;
         } else if (attribute === 'rotation') {
-          game[type][id][attribute] = change.value;
-        } else {
+          game[type][id].sprite[attribute] = change.value;
+        }
+        else if (attribute === 'spriteName') {
+          game[type][id].sprite.list[0].setTexture(change.value);
+        }
+        else {
           game[type][id][attribute] = change.value;
         }
         onUpdate(id, attribute, change.value);
@@ -174,7 +178,7 @@ function getCharacters(
         ].style.backgroundRepeat = 'no-repeat';
         document
           .getElementsByClassName('item')
-          [change.value.index].setAttribute('name', change.value.name);
+        [change.value.index].setAttribute('name', change.value.name);
         if (change.value.uses) {
           document.getElementsByClassName('used')[
             change.value.index
@@ -182,7 +186,7 @@ function getCharacters(
         } else {
           document.getElementsByClassName('used')[
             change.value.index
-          ].innerHTML = '∞';
+          ].innerHTML = 'âˆž';
         }
         document.getElementsByClassName('used')[
           change.value.index
@@ -208,6 +212,7 @@ function getCharacters(
           change.rawPath[2]
         ].sprite.setText(change.value);
       }
+      onUpdate(change.rawPath[1], change.path.id, change.value);
     });
     game.room.listen(`${type}/:id/:attribute/:id/:attribute`, function (
       change
@@ -284,6 +289,15 @@ function nextCharacterId(
   return `${type}${this.counts[type]}`;
 }
 
+function getAllCharacters(
+  type, // string: the type of characters
+  cb //function:  what you want to do to each character
+) {
+  Object.keys(this.game.state[type]).forEach((character, i) => {
+    cb(this.game.state[type][character], i);
+  });
+}
+
 // Attach something to the character or other things.
 function attachTo(
   type, // string: The type of characters/resources.
@@ -329,11 +343,11 @@ function unAttach(
   delete this.game.state[type][id][name];
 }
 
-// Returns the rotation that you need to rotate towards a point
+//Returns the rotation that you need to rotate towards a point
 function getRotationTowards(
   character, // object: a character you want to rotate
   x, // int: the x value you want to rotate towards.
-  y // int: the y value you want to rotate towards.
+  y, // int: the y value you want to rotate towards.
 ) {
   return character.x - x < 0
     ? Math.atan((character.y - y) / (character.x - x)) + Math.PI / 2
@@ -363,7 +377,8 @@ function follow(
   type1, // string: The type of characters that will be followed.
   type2, // string: The type of characters that will follow them.
   range = 0, // number: How far away should the followers be before they stop following.
-  speed = 1 // number: The rate of speed the followers move at, ie. 0.5 for half speed, 2 for double speed.
+  speed = 1,
+  cb // number: The rate of speed the followers move at, ie. 0.5 for half speed, 2 for double speed.
 ) {
   if (Object.keys(this.game.state[type2]).length >= 1) {
     Object.keys(this.game.state[type2]).forEach((otherId) => {
@@ -376,7 +391,7 @@ function follow(
             closestPlayer = playerId;
             closestDistance = Math.sqrt(
               (x - this.game.state[type1][playerId].x) ** 2 +
-                (y - this.game.state[type1][playerId].y) ** 2
+              (y - this.game.state[type1][playerId].y) ** 2
             );
           } else {
             let distanceX = x - this.game.state[type1][playerId].x;
@@ -402,6 +417,7 @@ function follow(
           }
           this.game.state[type2][otherId].x -= dx * speed;
           this.game.state[type2][otherId].y -= dy * speed;
+          if (cb) cb(this.game.state[type1][closestPlayer], this.game.state[type2][otherId])
         }
       }
     });
@@ -412,6 +428,7 @@ const server = {
   setupCharacters,
   createACharacter,
   getACharacter,
+  getAllCharacters,
   deleteACharacter,
   nextCharacterId,
   attachTo,
